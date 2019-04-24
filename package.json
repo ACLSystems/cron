@@ -4,7 +4,7 @@
   "description": "módulo cron para actividades programadas",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=development JOBGROUPMAIN='0 * * * * *' nodemon index.js"
   },
   "repository": {
     "type": "git",
@@ -21,6 +21,11 @@
   },
   "homepage": "https://github.com/ACLSystems/cron#readme",
   "dependencies": {
-    "cron": "^1.6.0"
+    "cron": "^1.7.0",
+    "mongodb-uri": "^0.9.7",
+    "mongoose": "^5.5.3",
+    "mongoose-sequence": "^5.0.1",
+    "winston": "^3.2.1",
+    "winston-daily-rotate-file": "^3.8.0"
   }
 }
