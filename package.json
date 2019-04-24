@@ -4,6 +4,7 @@
   "description": "módulo cron para actividades programadas",
   "main": "index.js",
   "scripts": {
+		"start": "node index.js",
     "test": "NODE_ENV=development JOBGROUPMAIN='0 * * * * *' nodemon index.js"
   },
   "repository": {
