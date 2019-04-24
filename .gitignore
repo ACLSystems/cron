@@ -56,5 +56,5 @@ node_modules/*
 doc/Oferta*
 /src/*NO_USAR*
 /*/*_notUse*
-alumno.start.*
-*_alumno*.sh
+.dockerignore
+Dockerfile
