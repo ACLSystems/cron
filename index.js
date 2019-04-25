@@ -3,13 +3,10 @@ const mongoose 					= require( 'mongoose' );
 const uriFormat 				= require( 'mongodb-uri' );
 const version						= require('./version/version');
 const logger 						= require('./shared/winston-logger');
+const cronJob 					= require('cron').CronJob;
 mongoose.Promise = global.Promise;
 
-log('info', version.app + '@' + version.version + ' ' + version.vendor + '\u00A9' + version.year);
-
-// DEFINICION DE JOBS
-const permJob 					= require('cron').CronJob; // JOB Permanente. NO BORRAR
-const groupMaintenance 	= require('cron').CronJob; // JOB para mantenimiento de grupos que han cerrado
+log('info', version.app + '@' + version.version + ' ' + version.vendor + ' \u00A9' + version.year);
 
 // PROGRAMACION DE JOBS
 // Colocar la programación aquí o preferentemente definir una variable de ambiente
@@ -40,6 +37,14 @@ mongoose.connection.on('connected', function () {
 	let now = new Date();
 	log('info','Conexion a la base de datos abierta exitosamente. ' + now);
 	log('info',JOBS.length + ' jobs listos para correr en la programacion definida');
+
+	// Corrida de JOBS
+	permJob.jobName = 'permJob';
+	groupMaintenanceJob.jobName = 'groupMaintenanceJob';
+	permJob.start();
+	groupMaintenanceJob.start();
+	log('info','Siguiente corrida para job ' + permJob.jobName + ': ' + permJob.nextDates(1).map(date => date.toString()));
+	log('info','Siguiente corrida para job ' + groupMaintenanceJob.jobName + ': ' + groupMaintenanceJob.nextDates(1).map(date => date.toString()));
 });
 
 // Si la conexión manda un error
@@ -67,48 +72,50 @@ process.on('SIGINT', function() {
 
 // Job Permanente
 // Este job se puede usar para actividades cotidianas de servidor...
-new permJob(permJobSchedule, function() {
-	const jobName = 'permJob';
+var permJob = new cronJob(permJobSchedule, function() {
 	const now = new Date();
-	log('info','Iniciando corrida de Job ' + jobName + '. ' + now);
+	var that = this;
+	log('info','Iniciando corrida de Job ' + that.jobName + '. ' + now);
 	// ----------------- RUNNING ACTIVITIES
 	let finished = new Date();
 	let dif = finished - now;
 	let calc = calculateMilis(dif);
-	log('info','El Job ' + jobName + ' ha terminado. ' + finished);
-	log('info','El tiempo de corrida del job ' + jobName + ' fue de ' + calc.number + ' ' + calc.units);
+	log('info','El Job ' + this.jobName + ' ha terminado. ' + finished);
+	log('info','El tiempo de corrida del job ' + that.jobName + ' fue de ' + calc.number + ' ' + calc.units);
+	log('info','Siguiente corrida para job ' + that.jobName + ': ' + that.nextDates(1).map(date => date.toString()));
 }, null, true, tz);
 
 // Job para mantenimiento de grupos
-new groupMaintenance(groupMainSchedule, async function() {
+const groupMaintenanceJob = new cronJob(groupMainSchedule, async function() {
 	const Group 	= require('./src/groups');
 	const Roster 	= require('./src/roster');
 	var now 		= new Date();
-	const jobName = 'groupMaintenance';
+	var that = this;
 
 	async function iterateGroups(groups) {
 		try {
 			for (let index = 0; index < groups.length; index++){
 				let group = groups[index];
 				let res = await Roster.updateMany({group:group._id}, {status: 'finished'});
-				log('info','' + jobName + ': se encontraron '+ res.n + ' rosters y se modificaron '+ res.nModified + ' para el grupo '+ group._id);
+				log('info','' + that.jobName + ': se encontraron '+ res.n + ' rosters y se modificaron '+ res.nModified + ' para el grupo '+ group._id);
 				group.status = 'closed';
 				try {
 					await group.save();
-					log('info','' + jobName + ': El grupo con id '+ group._id + ' ha sido modificado');
+					log('info','' + that.jobName + ': El grupo con id '+ group._id + ' ha sido modificado');
 				} catch(err) {
-					log('error',' +' + jobName + '+ : El grupo con id' + group._id + ' al guardar arrojo un error:' + err);
+					log('error',' +' + that.jobName + '+ : El grupo con id' + group._id + ' al guardar arrojo un error:' + err);
 				}
 			}
 			let finished = new Date();
 			let dif = finished - now;
 			let calc = calculateMilis(dif);
-			log('info','' + jobName + ': Terminando procesamiento en ' + groups.length + ' grupos');
-			log('info','El job ' + jobName + ' ha terminado. ' + finished);
-			log('info','El tiempo de corrida para el job ' + jobName + ' fue de ' + calc.number + ' ' + calc.units);
+			log('info','' + that.jobName + ': Terminando procesamiento en ' + groups.length + ' grupos');
+			log('info','El job ' + that.jobName + ' ha terminado. ' + finished);
+			log('info','El tiempo de corrida para el job ' + that.jobName + ' fue de ' + calc.number + ' ' + calc.units);
+			log('info','Siguiente corrida para job ' + that.jobName + ': ' + that.nextDates(1).map(date => date.toString()));
 			return;
 		} catch (err) {
-			log('error','' + jobName + ': Se ha generado un error al actualizar los rosters con error: '+ err);
+			log('error','' + that.jobName + ': Se ha generado un error al actualizar los rosters con error: '+ err);
 		}
 	}
 
@@ -120,16 +127,18 @@ new groupMaintenance(groupMainSchedule, async function() {
 				let finished = new Date();
 				let dif = finished - now;
 				let calc = calculateMilis(dif);
-				log('info','' + jobName + ': No se encontraron grupos');
-				log('info','El job ' + jobName + ' ha terminado. ' + finished);
-				log('info','El tiempo de corrida para job ' + jobName + ' fue de ' + calc.number + ' ' + calc.units);
+				log('info','' + that.jobName + ': No se encontraron grupos');
+				log('info','El job ' + that.jobName + ' ha terminado. ' + finished);
+				log('info','El tiempo de corrida para job ' + that.jobName + ' fue de ' + calc.number + ' ' + calc.units);
+				log('info','Siguiente corrida para job ' + that.jobName + ': ' + that.nextDates(1).map(date => date.toString()));
 			}
 		}
 		).catch(err => {
-			log('error','' + jobName + ': Hubo un error al buscar los grupos con error: ' + err);
+			log('error','' + that.jobName + ': Hubo un error al buscar los grupos con error: ' + err);
 		});
-	log('info','Iniciando corrida de job ' + jobName + ' a las ' + now);
+	log('info','Iniciando corrida de job ' + that.jobName + ' a las ' + now);
 }, null, true, tz);
+
 
 
 // Private Functions
