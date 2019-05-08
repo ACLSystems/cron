@@ -32,7 +32,7 @@ const DatesSchema = new Schema ({
 	},
 	type: {
 		type: String,
-		enum: ['general','exam','activity']
+		enum: ['general','exam','task','certificate']
 	}
 });
 
@@ -69,7 +69,7 @@ module.exports = RubricSchema;
 const GroupsSchema = new Schema ({
 	status: {
 		type: String,
-		enum: ['draft','active','closed'],
+		enum: ['draft','coming','active','closed'],
 		default: 'draft'
 	},
 	code: {
@@ -183,6 +183,8 @@ GroupsSchema.index( { orgUnit			: 1 					} );
 GroupsSchema.index( { instructor	: 1 					} );
 GroupsSchema.index( { isActive		: 1 					} );
 GroupsSchema.index( { status			: 1 					} );
+GroupsSchema.index( { beginDate		: 1						} );
+GroupsSchema.index( { endDate			: 1						} );
 
 // Compilar esquema
 
