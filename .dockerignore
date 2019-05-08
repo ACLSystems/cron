@@ -30,6 +30,7 @@
 *.sqlite
 /bkp/*
 /test/*
+/sandbox/*
 
 # OS generated files #
 ######################
