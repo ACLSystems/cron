@@ -13,9 +13,11 @@ log('info', version.app + '@' + version.version + ' ' + version.vendor + ' \u00A
 const permJobSchedule		= '0 0 6 * * *'; // Todos los días a las 06:00 hrs
 const groupExpireSchedule	= process.env.JOBGROUPEXPIRE || '*/30 * * * * *';
 const groupActivateSchedule = process.env.JOBGROUPACTIVATE || '*/30 * * * * *';
+const groupActivateStatusSchedule = process.env.JOBGROUPACTIVATESTATUS || '*/30 * * * * *';
 
 // Aquí se colocarán los jobs en el arreglo
 const JOBS = [];
+const JOBNAMES = [];
 
 // CONEXION COMUN A MONGO
 const dbURI 							= process.env.MONGO_URI || 'mongodb://operator:Password01@mongo:27017/alumno';
@@ -35,184 +37,102 @@ mongoose.set('useFindAndModify', false);
 // EVENTOS DE CONEXION
 // Cuando nos logremos conectar
 mongoose.connection.on('connected', function () {
-	let now = new Date();
 	// Nombre de los jobs
 	permJob.jobName 					= 'Permanente';
 	groupExpireJob.jobName 		= 'Expira grupos';
 	groupActivateJob.jobName 	= 'Activa grupos';
+	groupActivateStatusJob.jobName = 'Status grupos';
 
 	// Metemos los nombres de los jobs en el arreglo de JOBS
-	JOBS.push(permJob.jobName);
-	JOBS.push(groupExpireJob.jobName);
-	JOBS.push(groupActivateJob.jobName);
+	JOBNAMES.push(permJob.jobName);
+	JOBNAMES.push(groupExpireJob.jobName);
+	JOBNAMES.push(groupActivateJob.jobName);
+	JOBNAMES.push(groupActivateStatusJob.jobName);
+
+	JOBS.push(permJob);
+	JOBS.push(groupExpireJob);
+	JOBS.push(groupActivateJob);
+	JOBS.push(groupActivateStatusJob);
 
 	// Generamos la cadena del nombre del job
 	permJob.jobNameSpaces 					= spacesTab(permJob.jobName);
 	groupExpireJob.jobNameSpaces 		= spacesTab(groupExpireJob.jobName);
 	groupActivateJob.jobNameSpaces 	= spacesTab(groupActivateJob.jobName);
-	log('info',displayDate(now) + ' || ' + spacesTab(version.app) + ' Conexion a la base de datos abierta exitosamente');
-	log('info',displayDate(now) + ' || ' + spacesTab(version.app) + ' '+ JOBS.length + ' jobs listos para correr en la programacion definida');
+	groupActivateStatusJob.jobNameSpaces 	= spacesTab(groupActivateStatusJob.jobName);
+	log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' Conexion a la base de datos abierta exitosamente');
+	log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' '+ JOBS.length + ' jobs listos para correr en la programacion definida');
 
 	// Corrida de JOBS
 	permJob.start();
 	groupExpireJob.start();
 	groupActivateJob.start();
-	log('info',displayDate(now) + ' || ' + permJob.jobNameSpaces + ' Siguiente corrida: ' + permJob.nextDates(1).map(date => displayDate(date)));
-	log('info',displayDate(now) + ' || ' + groupExpireJob.jobNameSpaces + ' Siguiente corrida: ' + groupExpireJob.nextDates(1).map(date => displayDate(date)));
-	log('info',displayDate(now) + ' || ' + groupActivateJob.jobNameSpaces + ' Siguiente corrida: ' + groupActivateJob.nextDates(1).map(date => displayDate(date)));
+	JOBS.forEach(job => {
+		log('info',displayDate(new Date()) + ' || ' + job.jobNameSpaces + ' Siguiente corrida: ' + job.nextDates(1).map(date => displayDate(date)));
+	});
 });
 
 // Si la conexión manda un error
 mongoose.connection.on('error',function (err) {
-	let now = new Date();
-	log('error',displayDate(now) + ' || ' + spacesTab(version.app) + ' Error de conexion a la base de datos: ' + err);
+	log('error',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' Error de conexion a la base de datos: ' + err);
 });
 
 // Cuando la conexión a la base se pierde
 mongoose.connection.on('disconnected', function () {
-	let now = new Date();
-	log('warn',displayDate(now) + ' || ' + spacesTab(version.app) + ' Se perdio la conexion a la base');
+	log('warn',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' Se perdio la conexion a la base');
 });
 
 // Si el proceso de NodeJS termina
 process.on('SIGINT', function() {
 	mongoose.connection.close(function () {
-		let now = new Date();
-		log('info',displayDate(now) + ' || ' + spacesTab(version.app) + ' El servicio y la conexion a la base han sido terminados exitosamente');
+		log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' El servicio y la conexion a la base han sido terminados exitosamente');
 		process.exit(0);
 	});
 });
 
-// JOBS
+// JOBS --------------------------------------------------------------
+// -------------------------------------------------------------------
 
 // Job Permanente
 // Este job se puede usar para actividades cotidianas de servidor...
 var permJob = new cronJob(permJobSchedule, function() {
 	const now = new Date();
-	var that = this;
-	log('info','' + that.jobNameSpaces + ' Iniciando. ' + now);
-	// ----------------- RUNNING ACTIVITIES
-	let finished = new Date();
-	let dif = finished - now;
-	let calc = calculateMilis(dif);
-	log('info',displayDate(finished) + ' || ' + this.jobNameSpaces + ' Terminado');
-	log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Tiempo de corrida: ' + calc.number + ' ' + calc.units);
-	log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Siguiente corrida: ' + that.nextDates(1).map(date => displayDate(date)));
+	log('info','' + this.jobNameSpaces + ' Iniciando. ' + now);
+	// ----------------- Actividades a ejecutar
+	// -----------------
+	displayFinished(now,this);
 }, null, true, tz);
 
 // Job para expiración de grupos
 const groupExpireJob = new cronJob(groupExpireSchedule, async function() {
-	const Group 	= require('./src/groups');
-	const Roster 	= require('./src/roster');
 	var now 		= new Date();
-	var that = this;
-
-	async function iterateGroups(groups) {
-		let now = new Date();
-		try {
-			for (let index = 0; index < groups.length; index++){
-				let group = groups[index];
-				let res = await Roster.updateMany({group:group._id}, {status: 'finished'});
-				log('info',displayDate(now) + ' || ' + that.jobNameSpaces +  ' ' + res.n + ' rosters encontrados y '+ res.nModified + ' modificados para el grupo '+ group.code);
-				group.status = 'closed';
-				try {
-					await group.save();
-					log('info',displayDate(now) + ' || ' + that.jobNameSpaces + ' El grupo '+ group.code + ' con fecha de expiración ' + displayDate(group.endDate) + ' ha sido cerrado');
-				} catch(err) {
-					log('error',displayDate(now) + ' || ' + that.jobNameSpaces + ' El grupo ' + group.code + ' al guardar arrojo un error:' + err);
-				}
-			}
-			let finished = new Date();
-			let dif = finished - now;
-			let calc = calculateMilis(dif);
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + groups.length + ' grupos');
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Terminado');
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Tiempo de corrida: ' + calc.number + ' ' + calc.units);
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Siguiente corrida: ' + that.nextDates(1).map(date => displayDate(date)));
-			return;
-		} catch (err) {
-			now = new Date();
-			log('error',displayDate(now) + ' || ' + that.jobNameSpaces + ' Se ha generado un error al actualizar los rosters con error: '+ err);
-		}
-	}
-
-	Group.find({endDate:{$lt:now},status:'active'})
-		.then(groups => {
-			if(groups && groups.length > 0) {
-				iterateGroups(groups);
-			} else {
-				let finished = new Date();
-				let dif = finished - now;
-				let calc = calculateMilis(dif);
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' No se encontraron grupos');
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Terminado');
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Tiempo de corrida: ' + calc.number + ' ' + calc.units);
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Siguiente corrida: ' + that.nextDates(1).map(date => displayDate(date)));
-			}
-		}
-		).catch(err => {
-			now = new Date();
-			log('error',displayDate(now) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los grupos con error: ' + err);
-		});
-	log('info',displayDate(now) + ' || ' + that.jobNameSpaces + ' Iniciando');
+	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
+	await searchExpGroups({endDate:{$lt:now},status:'active'},'closed',now,this);
 }, null, true, tz);
 
-// Job para expiración de grupos
+// Job para activación de grupos
 const groupActivateJob = new cronJob(groupActivateSchedule, async function() {
-	const Group 	= require('./src/groups');
 	var now 		= new Date();
-	var that = this;
+	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
+	await searchGroups({beginDate:{$lt:now},status:'coming'},'active',now,this);
+}, null, true, tz);
 
-	async function iterateGroups(groups) {
-		let now = new Date();
-		try {
-			for (let index = 0; index < groups.length; index++){
-				let group = groups[index];
-				group.status = 'active';
-				try {
-					await group.save();
-					log('info',displayDate(now) + ' || ' + that.jobNameSpaces + ' El grupo '+ group.code + ' con fecha de inicio: ' + displayDate(group.beginDate) + ' ha sido activado');
-				} catch(err) {
-					log('error',displayDate(now) + ' || ' + that.jobNameSpaces + ' El grupo ' + group.code + ' al guardar arrojo un error:' + err);
-				}
-			}
-			let finished = new Date();
-			let dif = finished - now;
-			let calc = calculateMilis(dif);
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + groups.length + ' grupos');
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Terminado');
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Tiempo de corrida: ' + calc.number + ' ' + calc.units);
-			log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Siguiente corrida: ' + that.nextDates(1).map(date => displayDate(date)));
-			return;
-		} catch (err) {
-			now = new Date();
-			log('error',displayDate(now) + ' || ' + that.jobNameSpaces + ' Se ha generado un error al actualizar los grupos: '+ err);
-		}
-	}
-
-	Group.find({beginDate:{$lt:now},status:'coming'})
-		.then(groups => {
-			if(groups && groups.length > 0) {
-				iterateGroups(groups);
-			} else {
-				let finished = new Date();
-				let dif = finished - now;
-				let calc = calculateMilis(dif);
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' No se encontraron grupos');
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Terminado');
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Tiempo de corrida: ' + calc.number + ' ' + calc.units);
-				log('info',displayDate(finished) + ' || ' + that.jobNameSpaces + ' Siguiente corrida: ' + that.nextDates(1).map(date => displayDate(date)));
-			}
-		}
-		).catch(err => {
-			now = new Date();
-			log('error',displayDate(now) + ' || ' + that.jobNameSpaces + ' Hubo un error al buscar los grupos con error: ' + err);
-		});
-	log('info',displayDate(now) + ' || ' + that.jobNameSpaces + ' Iniciando');
+// Job para setear propiedad 'status' de grupos
+// Grupos viejos que no tuvieron esta propiedad
+const groupActivateStatusJob = new cronJob(groupActivateStatusSchedule, async function() {
+	const now = new Date();
+	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
+	await searchGroups({status:{$exists:false}},'active',now,this);
 }, null, true, tz);
 
 
-// Private Functions
+
+
+// Funciones privadas ------------------------------------------------
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+
+
+
 
 function encodeMongoURI (urlString) {
 	if (urlString) {
@@ -263,7 +183,7 @@ function calculateMilis(number) {
 
 function spacesTab(string) {
 	let maxSpaces = version.app.length;
-	JOBS.forEach(s => {
+	JOBNAMES.forEach(s => {
 		if(s.length > maxSpaces) {
 			maxSpaces = s.length;
 		}
@@ -291,4 +211,88 @@ function displayDate(date) {
 		timeZoneName: 'short'
 	};
 	return date.toLocaleString('en-US',options);
+}
+
+function displayFinished(now,job) {
+	let finished = new Date();
+	let dif = finished - now;
+	let calc = calculateMilis(dif);
+	log('info',displayDate(finished) + ' || ' + job.jobNameSpaces + ' Terminado');
+	log('info',displayDate(finished) + ' || ' + job.jobNameSpaces + ' Tiempo de corrida: ' + calc.number + ' ' + calc.units);
+	log('info',displayDate(finished) + ' || ' + job.jobNameSpaces + ' Siguiente corrida: ' + job.nextDates(1).map(date => displayDate(date)));
+	return;
+}
+
+async function iterateGroups(groups,status,now,that) {
+	try {
+		for (let index = 0; index < groups.length; index++){
+			let group = groups[index];
+			group.status = status;
+			try {
+				await group.save();
+				log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' El grupo '+ group.code + ' con fecha de inicio: ' + displayDate(group.beginDate) + ' ha sido activado');
+			} catch(err) {
+				log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' El grupo ' + group.code + ' al guardar arrojo un error:' + err);
+			}
+		}
+		log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + groups.length + ' grupos');
+		displayFinished(now,that);
+		return;
+	} catch (err) {
+		log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Se ha generado un error al actualizar los grupos: '+ err);
+	}
+}
+
+async function searchGroups(query,status,now,that){
+	const Group 	= require('./src/groups');
+	await Group.find(query)
+		.then(groups => {
+			if(groups && groups.length > 0) {
+				iterateGroups(groups,status,now,that);
+			} else {
+				log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' No se encontraron grupos');
+				displayFinished(now,that);
+			}
+		}
+		).catch(err => {
+			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Hubo un error al buscar los grupos con error: ' + err);
+		});
+}
+
+async function expIterateGroups(groups,status,now,that) {
+	const Roster 	= require('./src/roster');
+	try {
+		for (let index = 0; index < groups.length; index++){
+			let group = groups[index];
+			let res = await Roster.updateMany({group:group._id}, {status: 'finished'});
+			log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces +  ' ' + res.n + ' rosters encontrados y '+ res.nModified + ' modificados para el grupo '+ group.code);
+			group.status = status;
+			try {
+				await group.save();
+				log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' El grupo '+ group.code + ' con fecha de expiración ' + displayDate(group.endDate) + ' ha sido cerrado');
+			} catch(err) {
+				log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' El grupo ' + group.code + ' al guardar arrojo un error:' + err);
+			}
+		}
+		log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + groups.length + ' grupos');
+		displayFinished(now,that);
+	} catch (err) {
+		log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Se ha generado un error al actualizar los rosters con error: '+ err);
+	}
+}
+
+async function searchExpGroups(query,status,now,that){
+	const Group 	= require('./src/groups');
+	Group.find(query)
+		.then(groups => {
+			if(groups && groups.length > 0) {
+				expIterateGroups(groups,status,now,that);
+			} else {
+				log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' No se encontraron grupos');
+				displayFinished(now,that);
+			}
+		}
+		).catch(err => {
+			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los grupos con error: ' + err);
+		});
 }
