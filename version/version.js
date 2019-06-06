@@ -1,4 +1,4 @@
-const version = '1.0.4';
+const version = '1.0.5a';
 
 module.exports = {
 	app: 'alumnoCRON',

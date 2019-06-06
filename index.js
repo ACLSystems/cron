@@ -14,6 +14,7 @@ const permJobSchedule		= '0 0 6 * * *'; // Todos los días a las 06:00 hrs
 const groupExpireSchedule	= process.env.JOBGROUPEXPIRE || '*/30 * * * * *';
 const groupActivateSchedule = process.env.JOBGROUPACTIVATE || '*/30 * * * * *';
 const groupActivateStatusSchedule = process.env.JOBGROUPACTIVATESTATUS || '*/30 * * * * *';
+const userFiscalRepairSchedule = process.env.JOBUSERFISCALREPAIR || '*/30 * * * * *';
 
 // Aquí se colocarán los jobs en el arreglo
 const JOBS = [];
@@ -42,23 +43,27 @@ mongoose.connection.on('connected', function () {
 	groupExpireJob.jobName 		= 'Expira grupos';
 	groupActivateJob.jobName 	= 'Activa grupos';
 	groupActivateStatusJob.jobName = 'Status grupos';
+	userFiscalRepairJob.jobName = 'Repara fiscal en users';
 
 	// Metemos los nombres de los jobs en el arreglo de JOBS
 	JOBNAMES.push(permJob.jobName);
 	JOBNAMES.push(groupExpireJob.jobName);
 	JOBNAMES.push(groupActivateJob.jobName);
 	JOBNAMES.push(groupActivateStatusJob.jobName);
+	JOBNAMES.push(userFiscalRepairJob.jobName);
 
 	JOBS.push(permJob);
 	JOBS.push(groupExpireJob);
 	JOBS.push(groupActivateJob);
 	JOBS.push(groupActivateStatusJob);
+	JOBS.push(userFiscalRepairJob);
 
 	// Generamos la cadena del nombre del job
 	permJob.jobNameSpaces 					= spacesTab(permJob.jobName);
 	groupExpireJob.jobNameSpaces 		= spacesTab(groupExpireJob.jobName);
 	groupActivateJob.jobNameSpaces 	= spacesTab(groupActivateJob.jobName);
 	groupActivateStatusJob.jobNameSpaces 	= spacesTab(groupActivateStatusJob.jobName);
+	userFiscalRepairJob.jobNameSpaces 		= spacesTab(userFiscalRepairJob.jobName);
 	log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' Conexion a la base de datos abierta exitosamente');
 	log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' '+ JOBS.length + ' jobs listos para correr en la programacion definida');
 
@@ -66,6 +71,8 @@ mongoose.connection.on('connected', function () {
 	permJob.start();
 	groupExpireJob.start();
 	groupActivateJob.start();
+	groupActivateStatusJob.start();
+	userFiscalRepairJob.start();
 	JOBS.forEach(job => {
 		log('info',displayDate(new Date()) + ' || ' + job.jobNameSpaces + ' Siguiente corrida: ' + job.nextDates(1).map(date => displayDate(date)));
 	});
@@ -105,34 +112,66 @@ var permJob = new cronJob(permJobSchedule, function() {
 // Job para expiración de grupos
 const groupExpireJob = new cronJob(groupExpireSchedule, async function() {
 	var now 		= new Date();
+	const query = {
+		endDate:{
+			$lt:now
+		},
+		status:'active'
+	};
+	const status = 'closed';
 	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
-	await searchExpGroups({endDate:{$lt:now},status:'active'},'closed',now,this);
+	await searchExpGroups(query,status,now,this);
 }, null, true, tz);
 
 // Job para activación de grupos
 const groupActivateJob = new cronJob(groupActivateSchedule, async function() {
 	var now 		= new Date();
+	const query = {
+		beginDate:{
+			$lt:now
+		},
+		status:'coming'
+	};
+	const status = 'active';
 	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
-	await searchGroups({beginDate:{$lt:now},status:'coming'},'active',now,this);
+	await searchGroups(query,status,now,this);
 }, null, true, tz);
 
 // Job para setear propiedad 'status' de grupos
 // Grupos viejos que no tuvieron esta propiedad
 const groupActivateStatusJob = new cronJob(groupActivateStatusSchedule, async function() {
 	const now = new Date();
+	const query = {
+		status:{
+			$exists:false
+		}
+	};
 	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
-	await searchGroups({status:{$exists:false}},'active',now,this);
+	await searchGroups(query,'active',now,this);
 }, null, true, tz);
 
-
-
+// Job para reparar/migrar usuarios con propiedad Fiscal anterior
+const userFiscalRepairJob = new cronJob(userFiscalRepairSchedule, async function() {
+	const now = new Date();
+	const limit = 100;
+	const query = {
+		fiscal:{
+			$exists:true
+		},
+		'fiscal.id': {
+			$exists: true
+		},
+		flag1:{
+			$exists:false
+		}
+	};
+	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando con límite de ' + limit + ' usuarios en la búsqueda');
+	await searchFiscalUsers(query,limit,now,this);
+}, null, true, tz);
 
 // Funciones privadas ------------------------------------------------
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
-
-
-
 
 function encodeMongoURI (urlString) {
 	if (urlString) {
@@ -283,7 +322,7 @@ async function expIterateGroups(groups,status,now,that) {
 
 async function searchExpGroups(query,status,now,that){
 	const Group 	= require('./src/groups');
-	Group.find(query)
+	await Group.find(query)
 		.then(groups => {
 			if(groups && groups.length > 0) {
 				expIterateGroups(groups,status,now,that);
@@ -294,5 +333,61 @@ async function searchExpGroups(query,status,now,that){
 		}
 		).catch(err => {
 			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los grupos con error: ' + err);
+		});
+}
+
+// Función que crea al FiscalContact y
+// Actualiza al User
+async function fiscalAndUser(user,now,that) {
+	const FiscalContact = require('./src/fiscalContacts');
+	if(typeof user.fiscal === 'object' && user.fiscal.id) {
+		let fc = new FiscalContact({
+			identification: user.fiscal.id,
+			name: user.person.name + ' ' + user.person.fatherName + ' ' +user.person.motherName,
+			observations: 'Usuario migrado',
+			email: user.person.email,
+			type: 'client',
+			cfdiUse: 'G03',
+			orgUnit: user.orgUnit,
+			mod: [{
+				what: 'Fiscal creation - cron migrated',
+				when: now,
+				by: 'System'
+			}]
+		});
+		await fc.save().then((fiscal) => {
+			user.admin.initialPassword = fiscal.identification;
+			user.fiscal = [fiscal._id];
+			user.markModified('fiscal');
+			user.flag1 = 'Fiscal del usuario migrado';
+			user.save().catch(err => {
+				log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al guardar al usuario corregido '+ user.name +' con error: ' + err);
+			});
+		}).catch(err => {
+			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al guardar al FiscalContact '+ user.fiscal.id +' con error: ' + err);
+		});
+	}
+}
+
+// función para buscar a usuarios que todavía
+// tengan una propiedad fiscal antigua
+async function searchFiscalUsers(query,limit,now,that) {
+	const User = require('./src/users');
+	await User.find(query)
+		.limit(limit)
+		.then(users => {
+			if(users && users.length > 0) {
+				users.forEach(user => {
+					fiscalAndUser(user,now,that);
+				});
+				log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + users.length + ' usuarios');
+				displayFinished(now,that);
+				return;
+			} else {
+				log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' No se encontraron usuarios para migrar');
+				displayFinished(now,that);
+			}
+		}).catch(err => {
+			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los usuarios con error: ' + err);
 		});
 }
