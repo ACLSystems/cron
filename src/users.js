@@ -287,7 +287,11 @@ const UserSchema = new Schema ({
 	attachedToWShift: {
 		type: Boolean,
 		default: false
-	}
+	},
+	project: [{
+		type: Schema.Types.ObjectId,
+		ref: 'projects'
+	}]
 });
 // Definir virtuals
 

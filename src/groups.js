@@ -154,6 +154,10 @@ const GroupsSchema = new Schema ({
 		type: Boolean,
 		default: true
 	},
+	project: {
+		type: Schema.Types.ObjectId,
+		ref: 'projects'
+	},
 	own: OwnerSchema,
 	mod: [ModSchema],
 	perm: PermissionsSchema,

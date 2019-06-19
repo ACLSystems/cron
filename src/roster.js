@@ -385,6 +385,10 @@ const RosterSchema = new Schema ({
 		type: Number,
 		default: 0
 	},
+	project: {
+		type: Schema.Types.ObjectId,
+		ref: 'projects'
+	},
 	mod: [ModSchema],
 	createDate: {
 		type: Date,

@@ -15,6 +15,7 @@ const groupExpireSchedule	= process.env.JOBGROUPEXPIRE || '*/30 * * * * *';
 const groupActivateSchedule = process.env.JOBGROUPACTIVATE || '*/30 * * * * *';
 const groupActivateStatusSchedule = process.env.JOBGROUPACTIVATESTATUS || '*/30 * * * * *';
 const userFiscalRepairSchedule = process.env.JOBUSERFISCALREPAIR || '*/30 * * * * *';
+const setProjectSchedule = process.env.JOBSETPROJECT || '*/30 * * * * *';
 
 // Aquí se colocarán los jobs en el arreglo
 const JOBS = [];
@@ -44,6 +45,7 @@ mongoose.connection.on('connected', function () {
 	groupActivateJob.jobName 	= 'Activa grupos';
 	groupActivateStatusJob.jobName = 'Status grupos';
 	userFiscalRepairJob.jobName = 'Repara fiscal en users';
+	setProjectJob.jobName = 'Project en Rosters';
 
 	// Metemos los nombres de los jobs en el arreglo de JOBS
 	JOBNAMES.push(permJob.jobName);
@@ -51,12 +53,14 @@ mongoose.connection.on('connected', function () {
 	JOBNAMES.push(groupActivateJob.jobName);
 	JOBNAMES.push(groupActivateStatusJob.jobName);
 	JOBNAMES.push(userFiscalRepairJob.jobName);
+	JOBNAMES.push(setProjectJob.jobName);
 
 	JOBS.push(permJob);
 	JOBS.push(groupExpireJob);
 	JOBS.push(groupActivateJob);
 	JOBS.push(groupActivateStatusJob);
 	JOBS.push(userFiscalRepairJob);
+	JOBS.push(setProjectJob);
 
 	// Generamos la cadena del nombre del job
 	permJob.jobNameSpaces 					= spacesTab(permJob.jobName);
@@ -64,6 +68,7 @@ mongoose.connection.on('connected', function () {
 	groupActivateJob.jobNameSpaces 	= spacesTab(groupActivateJob.jobName);
 	groupActivateStatusJob.jobNameSpaces 	= spacesTab(groupActivateStatusJob.jobName);
 	userFiscalRepairJob.jobNameSpaces 		= spacesTab(userFiscalRepairJob.jobName);
+	setProjectJob.jobNameSpaces = spacesTab(setProjectJob.jobName);
 	log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' Conexion a la base de datos abierta exitosamente');
 	log('info',displayDate(new Date()) + ' || ' + spacesTab(version.app) + ' '+ JOBS.length + ' jobs listos para correr en la programacion definida');
 
@@ -73,6 +78,7 @@ mongoose.connection.on('connected', function () {
 	groupActivateJob.start();
 	groupActivateStatusJob.start();
 	userFiscalRepairJob.start();
+	setProjectJob.start();
 	JOBS.forEach(job => {
 		log('info',displayDate(new Date()) + ' || ' + job.jobNameSpaces + ' Siguiente corrida: ' + job.nextDates(1).map(date => displayDate(date)));
 	});
@@ -167,6 +173,17 @@ const userFiscalRepairJob = new cronJob(userFiscalRepairSchedule, async function
 	};
 	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando con límite de ' + limit + ' usuarios en la búsqueda');
 	await searchFiscalUsers(query,limit,now,this);
+}, null, true, tz);
+
+var setProjectJob = new cronJob(setProjectSchedule, function() {
+	const now = new Date();
+	const limit = 100;
+	const project = '5d07d5a4707be10017e695b9';
+	const query = {
+		project: project
+	};
+	searchSEPHGroups(query,limit,now,this);
+	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando con límite de ' + limit + ' usuarios en la búsqueda');
 }, null, true, tz);
 
 // Funciones privadas ------------------------------------------------
@@ -390,4 +407,43 @@ async function searchFiscalUsers(query,limit,now,that) {
 		}).catch(err => {
 			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los usuarios con error: ' + err);
 		});
+}
+
+async function searchRostersProject(group,now,that) {
+	const Roster = require('./src/roster');
+	await Roster.find({group: group._id})
+		.then(items => {
+			if(items && items.length >0) {
+				items.forEach(item => {
+					item.project = group.project;
+					item.save().catch(err => {
+						log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al guardar al roster corregido '+ item._id +' con error: ' + err);
+					});
+				});
+			}
+		}).catch(err => {
+			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los rosters con error: ' + err);
+		});
+}
+
+// función para buscar a usuarios que todavía
+// tengan una propiedad fiscal antigua
+async function searchSEPHGroups(query,limit,now,that) {
+	const Group = require('./src/groups');
+	try {
+		const groups = await Group.find(query).limit(limit);
+		if(groups && groups.length > 0) {
+			for(var i=0; i < groups.length; i++) {
+				await searchRostersProject(groups[0],now,that);
+			}
+			log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + groups.length + ' groups');
+			displayFinished(now,that);
+			return;
+		} else {
+			log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' No se encontraron grupos para migrar');
+			displayFinished(now,that);
+		}
+	} catch (err) {
+		log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los grupos con error: ' + err);
+	}
 }
