@@ -409,21 +409,14 @@ async function searchFiscalUsers(query,limit,now,that) {
 		});
 }
 
-async function searchRostersProject(group,now,that) {
+async function updateRostersProject(group,now,that) {
 	const Roster = require('./src/roster');
-	await Roster.find({group: group._id})
-		.then(items => {
-			if(items && items.length >0) {
-				items.forEach(item => {
-					item.project = group.project;
-					item.save().catch(err => {
-						log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al guardar al roster corregido '+ item._id +' con error: ' + err);
-					});
-				});
-			}
-		}).catch(err => {
-			log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los rosters con error: ' + err);
-		});
+	try {
+		const res = await Roster.updateMany({group: group._id},{project: group.project});
+		log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces +  ' ' + res.n + ' rosters encontrados y '+ res.nModified + ' modificados para el grupo '+ group.code);
+	}	catch (err) {
+		log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ': Hubo un error al buscar los rosters con error: ' + err);
+	}
 }
 
 // función para buscar a usuarios que todavía
@@ -431,10 +424,10 @@ async function searchRostersProject(group,now,that) {
 async function searchSEPHGroups(query,limit,now,that) {
 	const Group = require('./src/groups');
 	try {
-		const groups = await Group.find(query).limit(limit);
+		const groups = await Group.find(query);
 		if(groups && groups.length > 0) {
 			for(var i=0; i < groups.length; i++) {
-				await searchRostersProject(groups[0],now,that);
+				await updateRostersProject(groups[i],now,that);
 			}
 			log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Terminando procesamiento para ' + groups.length + ' groups');
 			displayFinished(now,that);

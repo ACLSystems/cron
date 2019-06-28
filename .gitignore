@@ -28,8 +28,7 @@
 /bkp/*
 /test/*
 /sandbox/*
-/config/secret.js
-/config/newpass.js
+/local_scripts/*
 *.log
 *.sql
 *.sqlite

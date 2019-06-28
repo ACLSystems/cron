@@ -21,7 +21,7 @@ const AdminSchema = new Schema ({
 		type: Date,
 		default: Date.now
 	}
-});
+},{ _id: false });
 
 // Definir virtuals
 
@@ -43,7 +43,7 @@ const depSchema = new Schema ({
 	saveTask: {
 		type: Boolean
 	}
-});
+},{ _id: false });
 
 // Definir virtuals
 
@@ -90,7 +90,7 @@ const TasksSchema = new Schema ({
 	repair: {
 		type: String
 	}
-});
+},{ _id: false });
 
 // Definir virtuals
 
@@ -118,7 +118,7 @@ const QuestsSchema = new Schema ({
 		type: Date,
 		default: Date.now
 	}
-});
+},{ _id: false });
 
 // Definir virtuals
 
@@ -193,7 +193,7 @@ const GradesSchema = new Schema ({
 	repair: {
 		type: Number
 	}
-});
+},{ _id: false });
 
 GradesSchema.pre('save', async function(next) {
 	if(this.tasks && Array.isArray(this.tasks) && this.tasks.length >0) {
@@ -296,7 +296,7 @@ const SectionSchema = new Schema ({
 	endDate: {
 		type: Date
 	}
-});
+},{ _id: false });
 
 // Definir virtuals
 
@@ -459,6 +459,7 @@ RosterSchema.index( {track							: 1	}	);
 RosterSchema.index( {group							: 1	}	);
 RosterSchema.index( {report							: 1	}	);
 RosterSchema.index( {orgUnit						: 1	} );
+RosterSchema.index( {project						: 1	} );
 RosterSchema.index( {certificateNumber	: 1	}, { sparse: true } );
 RosterSchema.index( {student						: 1, status: 	1 } );
 
