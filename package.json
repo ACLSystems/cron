@@ -24,7 +24,7 @@
   "dependencies": {
     "cron": "^1.7.0",
     "mongodb-uri": "^0.9.7",
-    "mongoose": "^5.5.3",
+    "mongoose": "^5.7.5",
     "mongoose-sequence": "^5.0.1",
     "winston": "^3.2.1",
     "winston-daily-rotate-file": "^3.8.0"
