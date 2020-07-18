@@ -4,20 +4,17 @@ const Schema = mongoose.Schema;
 
 // Definir esquema y subesquemas
 
-const OwnerSchema = new Schema ({
-	user: {
+const PointSchema = new Schema ({
+	type: {
 		type: String,
-		required: true
+		default: 'Point'
 	},
-	org: {
-		type: String,
-		required: true
-	},
-	orgUnit: {
-		type: String,
-		required: true
+	coordinates: {
+		type: [Number],
+		index: '2dsphere'     // esto le dice a Mongo que son coordenadas de tipo "2DSphere"
 	}
-},{ _id: false });
+});
+
 
 // Definir virtuals
 
@@ -27,4 +24,4 @@ const OwnerSchema = new Schema ({
 
 // Compilar esquema
 
-module.exports = OwnerSchema;
+module.exports = PointSchema;

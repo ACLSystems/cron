@@ -1,11 +1,12 @@
 // Definir requerimientos
 const mongoose 					= require('mongoose');
-// const request 					= require('request-promise-native');
+const request 					= require('request-promise-native');
 const ModSchema 				= require('./modified'		);
 const PermissionsSchema = require('./permissions'	);
-// const Config 						= require('./config'			);
+const Config 						= require('./config'			);
 
 const Schema 						= mongoose.Schema;
+const ObjectId 					= Schema.Types.ObjectId;
 
 mongoose.plugin(schema => { schema.options.usePushEach = true; });
 
@@ -85,7 +86,7 @@ const FiscalContactSchema = new Schema({
 		default: false
 	},
 	orgUnit: {
-		type: Schema.Types.ObjectId,
+		type: ObjectId,
 		ref: 'orgUnits'
 	},
 	corporate: {
@@ -110,89 +111,89 @@ FiscalContactSchema.pre('validate', function(next) {
 });
 
 
-// FiscalContactSchema.pre('save', function(next) {
-// 	Config.findOne({})
-// 		.then((config) => {
-// 			if(config && config.apiExternal && config.apiExternal.enabled && config.apiExternal.uri){
-// 				if(config.apiExternal.username && config.apiExternal.token) {
-// 					const auth = new Buffer.from(config.apiExternal.username + ':' + config.apiExternal.token);
-// 					var send = cleanSend(this,config);
-// 					if(this.idAPIExternal) {
-// 						request({
-// 							method	: 'PUT',
-// 							uri			: config.apiExternal.uri + '/api/v1/contacts/' + this.idAPIExternal,
-// 							headers	: {
-// 								authorization: 'Basic ' + auth.toString('base64')
-// 							},
-// 							body 		: send,
-// 							json		: true
-// 						}).then((response) =>  {
-// 							this.lastResponse = response;
-// 							next();
-// 						}).catch((err) => {
-// 							next(err);
-// 						});
-// 					} else { // Vamos a crear un registro nuevo en apiExternal si no existe en apiExternal
-// 						request({
-// 							method	: 'GET',
-// 							uri			: config.apiExternal.uri + '/api/v1/contacts/',
-// 							headers	: {
-// 								authorization: 'Basic ' + auth.toString('base64')
-// 							},
-// 							qs: {
-// 								identification: send.identification
-// 							},
-// 							json		: true
-// 						})
-// 							.then((responses) =>  {
-// 								if(responses && responses.length > 0) {
-// 									this.idAPIExternal = responses[0].id;
-// 									request({
-// 										method	: 'PUT',
-// 										uri			: config.apiExternal.uri + '/api/v1/contacts/' + this.idAPIExternal,
-// 										headers	: {
-// 											authorization: 'Basic ' + auth.toString('base64')
-// 										},
-// 										body 		: send,
-// 										json		: true
-// 									}).then((response) =>  {
-// 										this.lastResponse = response;
-// 										next();
-// 									}).catch((err) => {
-// 										next(err);
-// 									});
-// 								} else {
-// 									request({
-// 										method	: 'POST',
-// 										uri			: config.apiExternal.uri + '/api/v1/contacts',
-// 										headers	: {
-// 											authorization: 'Basic ' + auth.toString('base64')
-// 										},
-// 										body 		: send,
-// 										json		: true
-// 									}).then((response) =>  {
-// 										this.lastResponse = response;
-// 										next();
-// 									}).catch((err) => {
-// 										next(err);
-// 									});
-// 								}
-// 							})
-// 							.catch((err) => {
-// 								next(err);
-// 							});
-// 					}
-// 				} else {
-// 					next();
-// 				}
-// 			} else {
-// 				next();
-// 			}
-// 		})
-// 		.catch((err) => {
-// 			next(err);
-// 		});
-// });
+FiscalContactSchema.pre('save', function(next) {
+	Config.findOne({})
+		.then((config) => {
+			if(config && config.apiExternal && config.apiExternal.enabled && config.apiExternal.uri){
+				if(config.apiExternal.username && config.apiExternal.token) {
+					const auth = new Buffer.from(config.apiExternal.username + ':' + config.apiExternal.token);
+					var send = cleanSend(this,config);
+					if(this.idAPIExternal) {
+						request({
+							method	: 'PUT',
+							uri			: config.apiExternal.uri + '/api/v1/contacts/' + this.idAPIExternal,
+							headers	: {
+								authorization: 'Basic ' + auth.toString('base64')
+							},
+							body 		: send,
+							json		: true
+						}).then((response) =>  {
+							this.lastResponse = response;
+							next();
+						}).catch((err) => {
+							next(err);
+						});
+					} else { // Vamos a crear un registro nuevo en apiExternal si no existe en apiExternal
+						request({
+							method	: 'GET',
+							uri			: config.apiExternal.uri + '/api/v1/contacts/',
+							headers	: {
+								authorization: 'Basic ' + auth.toString('base64')
+							},
+							qs: {
+								identification: send.identification
+							},
+							json		: true
+						})
+							.then((responses) =>  {
+								if(responses && responses.length > 0) {
+									this.idAPIExternal = responses[0].id;
+									request({
+										method	: 'PUT',
+										uri			: config.apiExternal.uri + '/api/v1/contacts/' + this.idAPIExternal,
+										headers	: {
+											authorization: 'Basic ' + auth.toString('base64')
+										},
+										body 		: send,
+										json		: true
+									}).then((response) =>  {
+										this.lastResponse = response;
+										next();
+									}).catch((err) => {
+										next(err);
+									});
+								} else {
+									request({
+										method	: 'POST',
+										uri			: config.apiExternal.uri + '/api/v1/contacts',
+										headers	: {
+											authorization: 'Basic ' + auth.toString('base64')
+										},
+										body 		: send,
+										json		: true
+									}).then((response) =>  {
+										this.lastResponse = response;
+										next();
+									}).catch((err) => {
+										next(err);
+									});
+								}
+							})
+							.catch((err) => {
+								next(err);
+							});
+					}
+				} else {
+					next();
+				}
+			} else {
+				next();
+			}
+		})
+		.catch((err) => {
+			next(err);
+		});
+});
 
 // Definir índices
 
@@ -200,6 +201,7 @@ FiscalContactSchema.index( { 'tag'						: 1 } );
 FiscalContactSchema.index( { 'identification'	: 1 } );
 FiscalContactSchema.index( { 'name'						: 1 } );
 FiscalContactSchema.index( { 'idAPIExternal'	: 1 } );
+FiscalContactSchema.index( { 'email'					: 1 } );
 FiscalContactSchema.index( { 'corporate'			: 1 }, {sparse: true});
 FiscalContactSchema.index( { 'orgUnit'				: 1 }, {sparse: true});
 
@@ -209,19 +211,19 @@ const FiscalContacts = mongoose.model('fiscalContacts', FiscalContactSchema);
 module.exports = FiscalContacts;
 
 
-// function cleanSend(temp, config) {
-// 	var s = JSON.parse(JSON.stringify(temp));
-// 	if(s.tag					) {delete s.tag;					}
-// 	if(s.mod					) {delete s.mod;					}
-// 	if(s.perm					) {delete s.perm;					}
-// 	if(s.dateSync			) {delete s.dateSync;			}
-// 	if(s.create				) {delete s.create;				}
-// 	if(s.corporate		) {delete s.corporate;		}
-// 	//if(s.lastResponse	) {delete s.lastResponse;	}
-// 	s.priceList 			= config.fiscal.priceList;
-// 	s.seller					= config.fiscal.seller;
-// 	s.term						= config.fiscal.term;
-// 	delete s.__v;
-// 	delete s._id;
-// 	return s;
-// }
+function cleanSend(temp, config) {
+	var s = JSON.parse(JSON.stringify(temp));
+	if(s.tag					) {delete s.tag;					}
+	if(s.mod					) {delete s.mod;					}
+	if(s.perm					) {delete s.perm;					}
+	if(s.dateSync			) {delete s.dateSync;			}
+	if(s.create				) {delete s.create;				}
+	if(s.corporate		) {delete s.corporate;		}
+	//if(s.lastResponse	) {delete s.lastResponse;	}
+	s.priceList 			= config.fiscal.priceList;
+	s.seller					= config.fiscal.seller;
+	s.term						= config.fiscal.term;
+	delete s.__v;
+	delete s._id;
+	return s;
+}

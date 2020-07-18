@@ -1,13 +1,14 @@
 // Definir requerimientos
 const mongoose 					= require('mongoose'			);
-// const moment 						= require('moment'				);
-// const bcrypt 						= require('bcrypt-nodejs'	);
+const moment 						= require('moment'				);
+const bcrypt 						= require('bcryptjs'			);
 const ModSchema 				= require('./modified'		);
 const PermissionsSchema = require('./permissions'	);
-// const PointSchema 			= require('./point'				);
-// const AddressSchema 		= require('./address'			);
+const PointSchema 			= require('./point'				);
+const AddressSchema 		= require('./address'			);
 
 const Schema 						= mongoose.Schema;
+const ObjectId 					= Schema.Types.ObjectId;
 
 mongoose.plugin(schema => { schema.options.usePushEach = true; });
 
@@ -114,14 +115,14 @@ PersonSchema.virtual('fullName').get(function () {
 });
 
 // Definir middleware
-// PersonSchema.pre('save', function(next) {
-// 	this.name = properCase(this.name);
-// 	this.fatherName = properCase(this.fatherName);
-// 	this.motherName = properCase(this.motherName);
-// 	var birthDate = moment.utc(this.birthDate);
-// 	this.birthDate = birthDate.toDate();
-// 	next();
-// });
+PersonSchema.pre('save', function(next) {
+	this.name = properCase(this.name);
+	this.fatherName = properCase(this.fatherName);
+	this.motherName = properCase(this.motherName);
+	var birthDate = moment.utc(this.birthDate);
+	this.birthDate = birthDate.toDate();
+	next();
+});
 
 module.exports = PersonSchema;
 
@@ -178,37 +179,49 @@ const RolesSchema = new Schema ({
 module.exports = RolesSchema;
 
 const AdmUsrSchema = new Schema({
+	// isActive Usuario activo o inactivo
 	isActive: {
 		type: Boolean,
 		default: true
 	},
+	// isVerified Sirve para validar la cuenta de correo
 	isVerified: {
 		type: Boolean,
 		default: false
 	},
+	// isDataVerified Sirve para validar los datos del usuario
 	isDataVerified: {
 		type: Boolean,
 		default: false
 	},
+	// recoverString Cadena para validar la pérdida del password
 	recoverString: {
 		type: String,
 		default: ''
 	},
+	// passwordSaved ???
 	passwordSaved:{
 		type: String,
 		default: ''
 	},
+	// validationString <-- Investigar para qué lo pusimos
 	validationString: {
 		type: String,
 		default: ''
 	},
+	// adminCreate Cuenta creada por el administrador
 	adminCreate: {
 		type: Boolean,
 		default: false
 	},
+	// initialPassword Para guardar el password original
 	initialPassword: {
 		type: String
-	}
+	},
+	// tokens del usuario
+	tokens: [{
+		type: String
+	}]
 },{ _id: false });
 
 // Definir virtuals
@@ -243,11 +256,11 @@ const UserSchema = new Schema ({
 		required: [true, 'Password is required']
 	},
 	org: {
-		type: Schema.Types.ObjectId,
+		type: ObjectId,
 		ref: 'orgs'
 	},
 	orgUnit: {
-		type: Schema.Types.ObjectId,
+		type: ObjectId,
 		ref: 'orgUnits'
 	},
 	report: {
@@ -271,17 +284,20 @@ const UserSchema = new Schema ({
 	mod: [ModSchema],
 	perm: PermissionsSchema,
 	admin: AdmUsrSchema,
-	// geometry: PointSchema,
-	// address: AddressSchema,
+	geometry: PointSchema,
+	address: AddressSchema,
 	student: StudentSchema,
 	corporate: CorporateSchema,
-	fiscal: Schema.Types.Mixed,
+	fiscal: [{
+		type: ObjectId,
+		ref: 'fiscalContacts'
+	}],
 	fiscalcurrent: {
 		type: Number
 	},
 	preferences: PrefsSchema,
 	workShift: {
-		type: Schema.Types.ObjectId,
+		type: ObjectId,
 		ref: 'workshifts'
 	},
 	attachedToWShift: {
@@ -289,45 +305,56 @@ const UserSchema = new Schema ({
 		default: false
 	},
 	project: [{
-		type: Schema.Types.ObjectId,
+		type: ObjectId,
 		ref: 'projects'
-	}]
+	}],
+	currentProject: {
+		type: String
+	},
+	image: {
+		data: Buffer,
+		contentType: String,
+		originalName: String
+	},
+	bio : {
+		type: String
+	}
 });
 // Definir virtuals
 
 // Definir middleware
 
 //Encriptar password antes de guardarlo en la base
-// UserSchema.pre('save', function(next) {
-// 	// Este último pedazo hay que validarlo antes de liberarlo.
-// 	// if(!this.isModified('password')) {
-// 	// 	next();
-// 	// }
-// 	//if(this.password && this.admin.passwordSaved !== 'saved') {
-// 	var re = /^\$2a\$10\$.*/;
-// 	var found = re.test(this.password);
-// 	if(!found) {
-// 		var salt = bcrypt.genSaltSync(10);
-// 		this.password = bcrypt.hashSync(this.password, salt);
-// 		this.admin.passwordSaved = 'saved';
-// 	}
-// 	next();
-// });
+UserSchema.pre('save', function(next) {
+	// Este último pedazo hay que validarlo antes de liberarlo.
+	// if(!this.isModified('password')) {
+	// 	next();
+	// }
+	//if(this.password && this.admin.passwordSaved !== 'saved') {
+	var re = /^\$2a\$10\$.*/;
+	var found = re.test(this.password);
+	if(!found) {
+		var salt = bcrypt.genSaltSync(10);
+		this.password = bcrypt.hashSync(this.password, salt);
+		this.admin.passwordSaved = 'saved';
+	}
+	next();
+});
 
-// UserSchema.pre('save', function(next) {
-// 	if(!this.roles) {
-// 		var roles = { isAdmin: false };
-// 		this.roles = roles;
-// 	}
-// 	next();
-// });
-//
-// UserSchema.methods.validatePassword = function(password, cb) {
-// 	bcrypt.compare(password, this.password, function(err, isOk) {
-// 		if(err) return cb(err);
-// 		cb(null, isOk);
-// 	});
-// };
+UserSchema.pre('save', function(next) {
+	if(!this.roles) {
+		var roles = { isAdmin: false };
+		this.roles = roles;
+	}
+	next();
+});
+
+UserSchema.methods.validatePassword = function(password, cb) {
+	bcrypt.compare(password, this.password, function(err, isOk) {
+		if(err) return cb(err);
+		cb(null, isOk);
+	});
+};
 
 // Definir índices
 
@@ -361,14 +388,14 @@ module.exports = User;
 
 // Funciones privadas
 
-// function properCase(obj) {
-// 	var name = new String(obj);
-// 	var newName = new String();
-// 	var nameArray = name.split(' ');
-// 	var arrayLength = nameArray.length - 1;
-// 	nameArray.forEach(function(word,i) {
-// 		word = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-// 		if(i === arrayLength) { newName += word; } else { newName += word + ' '; }
-// 	});
-// 	return newName;
-// }
+function properCase(obj) {
+	var name = new String(obj);
+	var newName = new String();
+	var nameArray = name.split(' ');
+	var arrayLength = nameArray.length - 1;
+	nameArray.forEach(function(word,i) {
+		word = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+		if(i === arrayLength) { newName += word; } else { newName += word + ' '; }
+	});
+	return newName;
+}

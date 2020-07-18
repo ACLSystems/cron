@@ -22,11 +22,12 @@
   },
   "homepage": "https://github.com/ACLSystems/cron#readme",
   "dependencies": {
-    "cron": "^1.7.0",
+    "bcryptjs": "^2.4.3",
+    "cron": "^1.8.2",
     "mongodb-uri": "^0.9.7",
-    "mongoose": "^5.5.3",
-    "mongoose-sequence": "^5.0.1",
+    "mongoose": "^5.9.9",
+    "mongoose-sequence": "^5.2.2",
     "winston": "^3.2.1",
-    "winston-daily-rotate-file": "^3.8.0"
+    "winston-daily-rotate-file": "^4.4.2"
   }
 }

@@ -13,6 +13,7 @@ log('info', version.app + '@' + version.version + ' ' + version.vendor + ' \u00A
 const permJobSchedule		= '0 0 6 * * *'; // Todos los días a las 06:00 hrs
 const groupExpireSchedule	= process.env.JOBGROUPEXPIRE || '*/30 * * * * *';
 const groupActivateSchedule = process.env.JOBGROUPACTIVATE || '*/30 * * * * *';
+const rosterExpireSchedule = process.env.JOBROSTEREXPIRE || '*/3 * * * * *';
 const groupActivateStatusSchedule = process.env.JOBGROUPACTIVATESTATUS || '*/30 * * * * *';
 const userFiscalRepairSchedule = process.env.JOBUSERFISCALREPAIR || '*/30 * * * * *';
 const setProjectSchedule = process.env.JOBSETPROJECT || '*/30 * * * * *';
@@ -43,6 +44,7 @@ mongoose.connection.on('connected', function () {
 	permJob.jobName 					= 'Permanente';
 	groupExpireJob.jobName 		= 'Expira grupos';
 	groupActivateJob.jobName 	= 'Activa grupos';
+	rosterExpireJob.jobName   = 'Expira roster';
 	groupActivateStatusJob.jobName = 'Status grupos';
 	userFiscalRepairJob.jobName = 'Repara fiscal en users';
 	setProjectJob.jobName = 'Project en Rosters';
@@ -51,6 +53,7 @@ mongoose.connection.on('connected', function () {
 	JOBNAMES.push(permJob.jobName);
 	JOBNAMES.push(groupExpireJob.jobName);
 	JOBNAMES.push(groupActivateJob.jobName);
+	JOBNAMES.push(rosterExpireJob.jobName);
 	JOBNAMES.push(groupActivateStatusJob.jobName);
 	JOBNAMES.push(userFiscalRepairJob.jobName);
 	JOBNAMES.push(setProjectJob.jobName);
@@ -58,6 +61,7 @@ mongoose.connection.on('connected', function () {
 	JOBS.push(permJob);
 	JOBS.push(groupExpireJob);
 	JOBS.push(groupActivateJob);
+	JOBS.push(rosterExpireJob);
 	JOBS.push(groupActivateStatusJob);
 	JOBS.push(userFiscalRepairJob);
 	JOBS.push(setProjectJob);
@@ -65,6 +69,7 @@ mongoose.connection.on('connected', function () {
 	// Generamos la cadena del nombre del job
 	permJob.jobNameSpaces 					= spacesTab(permJob.jobName);
 	groupExpireJob.jobNameSpaces 		= spacesTab(groupExpireJob.jobName);
+	rosterExpireJob.jobNameSpaces		= spacesTab(rosterExpireJob.jobName);
 	groupActivateJob.jobNameSpaces 	= spacesTab(groupActivateJob.jobName);
 	groupActivateStatusJob.jobNameSpaces 	= spacesTab(groupActivateStatusJob.jobName);
 	userFiscalRepairJob.jobNameSpaces 		= spacesTab(userFiscalRepairJob.jobName);
@@ -75,10 +80,11 @@ mongoose.connection.on('connected', function () {
 	// Corrida de JOBS
 	permJob.start();
 	groupExpireJob.start();
+	rosterExpireJob.start();
 	groupActivateJob.start();
 	groupActivateStatusJob.start();
-	userFiscalRepairJob.start();
-	setProjectJob.start();
+	// userFiscalRepairJob.start();
+	// setProjectJob.start();
 	JOBS.forEach(job => {
 		log('info',displayDate(new Date()) + ' || ' + job.jobNameSpaces + ' Siguiente corrida: ' + job.nextDates(1).map(date => displayDate(date)));
 	});
@@ -128,6 +134,22 @@ const groupExpireJob = new cronJob(groupExpireSchedule, async function() {
 	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
 	await searchExpGroups(query,status,now,this);
 }, null, true, tz);
+
+// Job para expiración de grupos
+const rosterExpireJob = new cronJob(rosterExpireSchedule, async function() {
+	var now 		= new Date();
+	const query = {
+		type: 'public',
+		endDate:{
+			$lt:now
+		},
+		openStatus:'active'
+	};
+	const status = 'closed';
+	log('info',displayDate(now) + ' || ' + this.jobNameSpaces + ' Iniciando');
+	await searchExpRosters(query,status,now,this);
+}, null, true, tz);
+
 
 // Job para activación de grupos
 const groupActivateJob = new cronJob(groupActivateSchedule, async function() {
@@ -320,7 +342,7 @@ async function expIterateGroups(groups,status,now,that) {
 	try {
 		for (let index = 0; index < groups.length; index++){
 			let group = groups[index];
-			let res = await Roster.updateMany({group:group._id}, {status: 'finished'});
+			let res = await Roster.updateMany({group:group._id}, {openStatus: 'closed'});
 			log('info',displayDate(new Date()) + ' || ' + that.jobNameSpaces +  ' ' + res.n + ' rosters encontrados y '+ res.nModified + ' modificados para el grupo '+ group.code);
 			group.status = status;
 			try {
@@ -336,6 +358,25 @@ async function expIterateGroups(groups,status,now,that) {
 		log('error',displayDate(new Date()) + ' || ' + that.jobNameSpaces + ' Se ha generado un error al actualizar los rosters con error: '+ err);
 	}
 }
+
+async function searchExpRosters(query,status,now,that){
+	const Roster 	= require('./src/roster');
+	try {
+		const itemsRes = await Roster.find(query).select('_id');
+		if(itemsRes && itemsRes.length > 0) {
+			const items = itemsRes.map(item => item._id);
+			let res = await Roster.updateMany({_id: {$in: items}}, {openStatus: 'closed'});
+			// expIterateRosters(items,status,now,that);
+			log('info',`${displayDate(new Date())} || ${that.jobNameSpaces} ${res.n} rosters públicos encontrados y ${res.nModified} modificados`);
+		} else {
+			log('info',`${displayDate(new Date())} || ${that.jobNameSpaces} No se encontraron rosters públicos abiertos`);
+			displayFinished(now,that);
+		}
+	} catch (e) {
+		log('error',`${displayDate(new Date())} || ${that.jobNameSpaces}: Hubo un error al buscar rosters públicos con error: ${e}`);
+	}
+}
+
 
 async function searchExpGroups(query,status,now,that){
 	const Group 	= require('./src/groups');
