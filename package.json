@@ -25,9 +25,9 @@
     "bcryptjs": "^2.4.3",
     "cron": "^1.8.2",
     "mongodb-uri": "^0.9.7",
-    "mongoose": "^5.9.9",
+    "mongoose": "^5.9.25",
     "mongoose-sequence": "^5.2.2",
-    "winston": "^3.2.1",
-    "winston-daily-rotate-file": "^4.4.2"
+    "winston": "^3.3.3",
+    "winston-daily-rotate-file": "^4.5.0"
   }
 }
